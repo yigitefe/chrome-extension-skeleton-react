@@ -10,58 +10,100 @@ function getStorageArea(areaName) {
     return area;
 }
 
-function getStorageError() {
-    return globalThis.chrome?.runtime?.lastError?.message || '';
-}
-
 function getErrorMessage(error) {
     return error instanceof Error ? error.message : String(error);
+}
+
+function getRuntimeError() {
+    const message = globalThis.chrome?.runtime?.lastError?.message;
+
+    return message ? new Error(message) : null;
+}
+
+function readStorageValue(areaName, key) {
+    return new Promise((resolve, reject) => {
+        let area;
+
+        try {
+            area = getStorageArea(areaName);
+        } catch (error) {
+            reject(error);
+            return;
+        }
+
+        area.get([key], (result) => {
+            const runtimeError = getRuntimeError();
+
+            if (runtimeError) {
+                reject(runtimeError);
+                return;
+            }
+
+            resolve(result[key]);
+        });
+    });
+}
+
+function writeStorageValue(areaName, key, value) {
+    return new Promise((resolve, reject) => {
+        let area;
+
+        try {
+            area = getStorageArea(areaName);
+        } catch (error) {
+            reject(error);
+            return;
+        }
+
+        area.set({ [key]: value }, () => {
+            const runtimeError = getRuntimeError();
+
+            if (runtimeError) {
+                reject(runtimeError);
+                return;
+            }
+
+            resolve(value);
+        });
+    });
 }
 
 export function useStorage(areaName, key, initialValue) {
     const [value, setValue] = useState(initialValue);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [loadError, setLoadError] = useState('');
-    const [saveError, setSaveError] = useState('');
+    const [error, setError] = useState('');
 
     useEffect(() => {
-        let mounted = true;
-        let area;
+        let active = true;
 
-        try {
-            area = getStorageArea(areaName);
-        } catch (error) {
-            setLoadError(error.message);
-            setIsLoading(false);
-            return undefined;
-        }
+        setIsLoading(true);
+        setError('');
 
-        area.get([key], (result) => {
-            if (!mounted) {
-                return;
-            }
-
-            try {
-                const storageError = getStorageError();
-
-                if (storageError) {
-                    setLoadError(storageError);
-                    setIsLoading(false);
+        readStorageValue(areaName, key)
+            .then((storedValue) => {
+                if (!active) {
                     return;
                 }
 
-                setLoadError('');
-                setValue(result[key] ?? initialValue);
-                setIsLoading(false);
-            } catch (error) {
-                setLoadError(getErrorMessage(error));
-                setIsLoading(false);
-            }
-        });
+                setValue(storedValue ?? initialValue);
+                setError('');
+            })
+            .catch((storageError) => {
+                if (!active) {
+                    return;
+                }
+
+                setError(getErrorMessage(storageError));
+            })
+            .finally(() => {
+                if (active) {
+                    setIsLoading(false);
+                }
+            });
 
         const handleChange = (changes, changedAreaName) => {
-            if (!mounted || changedAreaName !== areaName || !changes[key]) {
+            if (changedAreaName !== areaName || !(key in changes)) {
                 return;
             }
 
@@ -71,56 +113,35 @@ export function useStorage(areaName, key, initialValue) {
         globalThis.chrome?.storage?.onChanged?.addListener(handleChange);
 
         return () => {
-            mounted = false;
+            active = false;
             globalThis.chrome?.storage?.onChanged?.removeListener(handleChange);
         };
     }, [areaName, initialValue, key]);
 
-    const save = useCallback((nextValue = value) => new Promise((resolve, reject) => {
-        let area;
+    const save = useCallback(async (nextValue) => {
+        setIsSaving(true);
+        setError('');
 
         try {
-            area = getStorageArea(areaName);
-        } catch (error) {
-            setSaveError(error.message);
-            reject(error);
-            return;
+            await writeStorageValue(areaName, key, nextValue);
+            setValue(nextValue);
+            return nextValue;
+        } catch (storageError) {
+            const message = getErrorMessage(storageError);
+
+            setError(message);
+            throw new Error(message);
+        } finally {
+            setIsSaving(false);
         }
-
-        setIsSaving(true);
-        setSaveError('');
-
-        area.set({ [key]: nextValue }, () => {
-            try {
-                const storageError = getStorageError();
-
-                if (storageError) {
-                    setSaveError(storageError);
-                    setIsSaving(false);
-                    reject(new Error(storageError));
-                    return;
-                }
-
-                setSaveError('');
-                setValue(nextValue);
-                setIsSaving(false);
-                resolve(nextValue);
-            } catch (error) {
-                const message = getErrorMessage(error);
-                setSaveError(message);
-                setIsSaving(false);
-                reject(new Error(message));
-            }
-        });
-    }), [areaName, key, value]);
+    }, [areaName, key]);
 
     return {
+        disabled: isLoading || isSaving || Boolean(error),
+        error,
         isLoading,
         isSaving,
-        error: loadError || saveError,
-        loadError,
         save,
-        saveError,
         setValue,
         value,
     };
