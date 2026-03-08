@@ -30,24 +30,30 @@ src/
 ## Getting Started
 
 ### 1. Install Dependencies
+
 ```bash
 npm install
 ```
 
 ### 2. Development Mode
+
 ```bash
 npm run dev
 ```
+
 This will start the Vite dev server.
+
 - Open Chrome and go to `chrome://extensions`.
 - Enable **Developer mode**.
 - Load the `dist` folder.
 - **CRXJS Note**: Changes to React components will HMR automatically.
 
 ### 3. Build for Production
+
 ```bash
 npm run build
 ```
+
 Generates a production-ready build in the `dist` folder.
 
 ## Demos & Usage
