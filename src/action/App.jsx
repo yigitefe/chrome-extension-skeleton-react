@@ -1,26 +1,19 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect } from 'react';
+import { useStorage } from '../hooks/useStorage';
+
+const COUNT_KEY = 'count';
+const COLOR_KEY = 'color';
 
 const App = () => {
-    const [count, setCount] = useState(0);
+    const { save: saveCount, value: count } = useStorage('local', COUNT_KEY, 0);
+    const { value: color } = useStorage('sync', COLOR_KEY);
 
     useEffect(() => {
-        // Load count
-        chrome.storage.sync.get(['count'], (result) => {
-            if (result.count) setCount(result.count);
-        });
-
-        // Load background color preference
-        chrome.storage.sync.get(['color'], (result) => {
-            if (result.color) {
-                document.body.style.backgroundColor = result.color;
-            }
-        });
-    }, []);
+        document.body.style.backgroundColor = color;
+    }, [color]);
 
     const increment = () => {
-        const newCount = count + 1;
-        setCount(newCount);
-        chrome.storage.sync.set({ count: newCount });
+        saveCount(count + 1);
     };
 
     const openOptions = () => {
