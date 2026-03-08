@@ -18,11 +18,20 @@ export function useStorage(areaName, key, initialValue) {
     const [value, setValue] = useState(initialValue);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState('');
+    const [loadError, setLoadError] = useState('');
+    const [saveError, setSaveError] = useState('');
 
     useEffect(() => {
         let mounted = true;
-        const area = getStorageArea(areaName);
+        let area;
+
+        try {
+            area = getStorageArea(areaName);
+        } catch (error) {
+            setLoadError(error.message);
+            setIsLoading(false);
+            return undefined;
+        }
 
         area.get([key], (result) => {
             if (!mounted) {
@@ -32,11 +41,12 @@ export function useStorage(areaName, key, initialValue) {
             const storageError = getStorageError();
 
             if (storageError) {
-                setError(storageError);
+                setLoadError(storageError);
                 setIsLoading(false);
                 return;
             }
 
+            setLoadError('');
             setValue(result[key] ?? initialValue);
             setIsLoading(false);
         });
@@ -58,21 +68,30 @@ export function useStorage(areaName, key, initialValue) {
     }, [areaName, initialValue, key]);
 
     const save = useCallback((nextValue = value) => new Promise((resolve, reject) => {
-        const area = getStorageArea(areaName);
+        let area;
+
+        try {
+            area = getStorageArea(areaName);
+        } catch (error) {
+            setSaveError(error.message);
+            reject(error);
+            return;
+        }
 
         setIsSaving(true);
-        setError('');
+        setSaveError('');
 
         area.set({ [key]: nextValue }, () => {
             const storageError = getStorageError();
 
             if (storageError) {
-                setError(storageError);
+                setSaveError(storageError);
                 setIsSaving(false);
                 reject(new Error(storageError));
                 return;
             }
 
+            setSaveError('');
             setValue(nextValue);
             setIsSaving(false);
             resolve(nextValue);
@@ -80,10 +99,12 @@ export function useStorage(areaName, key, initialValue) {
     }), [areaName, key, value]);
 
     return {
-        error,
         isLoading,
         isSaving,
+        error: loadError || saveError,
+        loadError,
         save,
+        saveError,
         setValue,
         value,
     };
