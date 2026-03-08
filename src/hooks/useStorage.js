@@ -14,6 +14,10 @@ function getStorageError() {
     return globalThis.chrome?.runtime?.lastError?.message || '';
 }
 
+function getErrorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
+}
+
 export function useStorage(areaName, key, initialValue) {
     const [value, setValue] = useState(initialValue);
     const [isLoading, setIsLoading] = useState(true);
@@ -38,17 +42,22 @@ export function useStorage(areaName, key, initialValue) {
                 return;
             }
 
-            const storageError = getStorageError();
+            try {
+                const storageError = getStorageError();
 
-            if (storageError) {
-                setLoadError(storageError);
+                if (storageError) {
+                    setLoadError(storageError);
+                    setIsLoading(false);
+                    return;
+                }
+
+                setLoadError('');
+                setValue(result[key] ?? initialValue);
                 setIsLoading(false);
-                return;
+            } catch (error) {
+                setLoadError(getErrorMessage(error));
+                setIsLoading(false);
             }
-
-            setLoadError('');
-            setValue(result[key] ?? initialValue);
-            setIsLoading(false);
         });
 
         const handleChange = (changes, changedAreaName) => {
@@ -82,19 +91,26 @@ export function useStorage(areaName, key, initialValue) {
         setSaveError('');
 
         area.set({ [key]: nextValue }, () => {
-            const storageError = getStorageError();
+            try {
+                const storageError = getStorageError();
 
-            if (storageError) {
-                setSaveError(storageError);
+                if (storageError) {
+                    setSaveError(storageError);
+                    setIsSaving(false);
+                    reject(new Error(storageError));
+                    return;
+                }
+
+                setSaveError('');
+                setValue(nextValue);
                 setIsSaving(false);
-                reject(new Error(storageError));
-                return;
+                resolve(nextValue);
+            } catch (error) {
+                const message = getErrorMessage(error);
+                setSaveError(message);
+                setIsSaving(false);
+                reject(new Error(message));
             }
-
-            setSaveError('');
-            setValue(nextValue);
-            setIsSaving(false);
-            resolve(nextValue);
         });
     }), [areaName, key, value]);
 
