@@ -19,6 +19,9 @@ const App = () => {
         try {
             await colorStorage.save(colorStorage.value);
             setStatus('Options saved.');
+            setTimeout(() => {
+                setStatus('');
+            }, 750)
         } catch {
             // The error message comes from the hook.
         }
